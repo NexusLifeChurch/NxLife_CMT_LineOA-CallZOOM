@@ -1,1 +1,373 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NxLife Community Connect</title>
+    
+    <!-- External Libraries -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
 
+    <style>
+        :root {
+            --primary-dark: #6F4E37; /* Coffee Bean */
+            --primary-light: #A67B5B; /* Latte */
+            --cream: #F5F5DC; /* Cream */
+            --bg-gradient: linear-gradient(135deg, #2C2019 0%, #6F4E37 100%);
+            --text-color: #333;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Prompt', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-color);
+        }
+
+        .container {
+            width: 90%;
+            max-width: 400px;
+            background: var(--cream);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        /* Loading State */
+        #loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid var(--primary-light);
+            border-top: 5px solid var(--primary-dark);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Form Elements */
+        .hidden { display: none !important; }
+
+        .profile-section {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: -20px;
+        }
+        .profile-img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 3px solid var(--white);
+            object-fit: cover;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        h2 { color: var(--primary-dark); margin-bottom: 0.5rem; font-size: 1.2rem; }
+        .greeting { color: #888; font-style: italic; font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .label-text { font-size: 1rem; color: var(--primary-dark); margin-bottom: 1rem; display: block; }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            box-sizing: border-box;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-family: 'Prompt', sans-serif;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            border-color: var(--primary-light);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(to right, var(--primary-light), var(--primary-dark));
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(111, 78, 55, 0.3);
+            transition: transform 0.1s;
+        }
+        .btn:active { transform: scale(0.98); }
+
+        /* Zoom Button (Case 1 & iOS Fallback) */
+        .zoom-container {
+            text-align: center;
+        }
+        .zoom-btn {
+            background: #2D8CFF; /* Zoom Blue */
+            font-size: 1.2rem;
+        }
+        .zoom-icon { font-size: 2rem; display: block; margin-bottom: 5px; }
+
+        .status-msg { margin-top: 10px; font-size: 0.9rem; color: #666; }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="app-container">
+        
+        <!-- LOADING SCREEN -->
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>กำลังตรวจสอบข้อมูล...</p>
+        </div>
+
+        <!-- FORM SCREEN (Case 2) -->
+        <div id="form-screen" class="hidden">
+            <div class="profile-section">
+                <img id="user-profile-img" src="" alt="Profile" class="profile-img">
+            </div>
+            <div style="clear: both; height: 10px;"></div>
+            
+            <p class="greeting" id="greeting-msg">สวัสดี คุณ ...</p>
+            <label class="label-text">สะดวกให้เราเรียกคุณว่าอะไรดีครับ?</label>
+            
+            <input type="text" id="input-realname" placeholder="ชื่อจริง (เช่น สมชาย ใจดี)">
+            <input type="text" id="input-nickname" placeholder="ชื่อเล่น (เช่น ตี๋ A1)">
+            
+            <button class="btn" id="btn-confirm">ยืนยันและเข้า Zoom</button>
+        </div>
+
+        <!-- ZOOM LINK SCREEN (Fallback / Success) -->
+        <div id="zoom-screen" class="hidden zoom-container">
+            <h2>เปิด Zoom Meeting</h2>
+            <p class="status-msg">หากระบบไม่เปิดอัตโนมัติ กรุณากดปุ่มด้านล่าง</p>
+            <button class="btn zoom-btn" id="btn-open-zoom">
+                <span class="zoom-icon">🎥</span>
+                เข้าห้อง Zoom เดี๋ยวนี้
+            </button>
+        </div>
+
+        <!-- ERROR SCREEN -->
+        <div id="error-screen" class="hidden">
+            <h2 style="color: #d9534f;">ขออภัย</h2>
+            <p id="error-msg">เกิดข้อผิดพลาด</p>
+        </div>
+
+    </div>
+
+    <script>
+        // ***************** CONFIGURATION *****************
+        // นำ URL Web App จาก Google Apps Script มาใส่ตรงนี้
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwEPR9FARhVxyQu3_spLb47kue08an21zNlrpOb5Xg7-hr_4Ag3U726Wl-ICUTWY_F3nQ/exec"; 
+        
+        // ตัวแปร Global
+        let liffId = ""; // LIFF ID จะถูกดึงจาก URL โดยอัตโนมัติถ้าใช้ liff.line.me แต่ถ้าใช้ Endpoint ตรงๆ ต้องใส่
+        let params = {};
+        let lineProfile = {};
+
+        // เริ่มต้นการทำงาน
+        async function main() {
+            try {
+                // 1. Initialize LIFF
+                await liff.init({ liffId: "2008560135-06VyMziu" }); // ใส่ LIFF ID ของคุณ
+                
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+
+                // 2. Parse Parameters
+                // ดึงจาก liff.state หรือ window.location.search
+                const urlParams = new URLSearchParams(window.location.search);
+                params = {
+                    Zopen: urlParams.get('Zopen'),
+                    Zid: urlParams.get('Zid'),
+                    Zpass: urlParams.get('Zpass'),
+                    Activity: urlParams.get('Activity'),
+                    Sdate: urlParams.get('Sdate'),
+                    Edate: urlParams.get('Edate')
+                };
+
+                // 3. Logic ตรวจสอบเบื้องต้น
+                if (params.Zopen !== '1') {
+                    showError("Parameter ไม่ถูกต้อง (Zopen != 1)");
+                    return;
+                }
+
+                if (!checkTime(params.Sdate, params.Edate)) {
+                    showError("ยังไม่ถึงเวลานัดหมาย หรือ หมดเวลาแล้ว");
+                    return;
+                }
+
+                // 4. ดึงข้อมูล User
+                lineProfile = await liff.getProfile();
+                
+                // 5. เรียก Backend เพื่อเช็คสถานะ
+                const checkResponse = await callGAS('checkUser', { userId: lineProfile.userId });
+
+                if (checkResponse.userExists && checkResponse.hasRegisterName) {
+                    // Case 1: ข้อมูลครบ -> เปิด Zoom เลย + Log CheckIN Background
+                    openZoomAndLog();
+                } else {
+                    // Case 2: ข้อมูลไม่ครบ -> แสดงฟอร์ม
+                    showForm();
+                }
+
+            } catch (err) {
+                console.error(err);
+                showError("เกิดข้อผิดพลาดในการเชื่อมต่อ: " + err.message);
+            }
+        }
+
+        // --- Logic Functions ---
+
+        function checkTime(sDateStr, eDateStr) {
+            if (!sDateStr || !eDateStr) return true; // ถ้าไม่มีเวลามากำกับ ให้ผ่านได้เลย (Assumption)
+            
+            // Format รับเข้ามาควรเป็นแบบมาตรฐาน หรือ ISO 
+            // Assumption: Parameter ส่งมาเป็น String ที่ Date.parse อ่านได้ 
+            // หากส่งมาเป็น YYYY-MM-DD HH:mm ต้องระวังเรื่อง Timezone
+            
+            const now = new Date();
+            const start = new Date(sDateStr);
+            const end = new Date(eDateStr);
+
+            // กรณี Date Invalid ให้ผ่านไปก่อน หรือจะ Block ก็ได้ตาม Requirement
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) return true;
+
+            return now >= start && now <= end;
+        }
+
+        function showForm() {
+            hideAll();
+            document.getElementById('form-screen').classList.remove('hidden');
+            
+            // Set User Info
+            document.getElementById('user-profile-img').src = lineProfile.pictureUrl || "https://via.placeholder.com/50";
+            document.getElementById('greeting-msg').innerText = `สวัสดี คุณ ${lineProfile.displayName}`;
+            
+            // Bind Event
+            document.getElementById('btn-confirm').onclick = handleFormSubmit;
+        }
+
+        async function handleFormSubmit() {
+            const realName = document.getElementById('input-realname').value.trim();
+            const nickName = document.getElementById('input-nickname').value.trim();
+
+            if (!realName && !nickName) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'กรุณากรอกข้อมูล',
+                    text: 'สะดวกให้เราเรียกคุณว่าอะไรดีครับ?',
+                    confirmButtonColor: '#6F4E37'
+                });
+                return;
+            }
+
+            // แสดง Loading ชั่วคราว หรือ เปลี่ยนข้อความปุ่ม
+            const btn = document.getElementById('btn-confirm');
+            btn.innerText = "กำลังบันทึก...";
+            btn.disabled = true;
+
+            // ยิงไป Zoom เลยเพื่อความเร็ว
+            openZoom();
+
+            // ส่งข้อมูลไปบันทึก Background
+            callGAS('registerAndLog', {
+                userId: lineProfile.userId,
+                displayName: lineProfile.displayName,
+                pictureUrl: lineProfile.pictureUrl,
+                statusMessage: lineProfile.statusMessage,
+                realName: realName,
+                nickName: nickName,
+                activity: params.Activity
+            }); // ไม่ต้อง await ผลลัพธ์
+        }
+
+        function openZoomAndLog() {
+            // ยิง Zoom เลย
+            openZoom();
+            
+            // Log CheckIN Background
+            callGAS('logCheckIn', {
+                userId: lineProfile.userId,
+                activity: params.Activity
+            });
+        }
+
+        function openZoom() {
+            hideAll();
+            document.getElementById('zoom-screen').classList.remove('hidden');
+            
+            const zoomUrl = `https://zoom.us/j/${params.Zid}?pwd=${params.Zpass}`;
+            
+            // พยายามเปิดอัตโนมัติ
+            liff.openWindow({
+                url: zoomUrl,
+                external: true
+            });
+
+            // ผูกปุ่มกดเผื่อไม่เด้ง (iOS)
+            document.getElementById('btn-open-zoom').onclick = function() {
+                liff.openWindow({
+                    url: zoomUrl,
+                    external: true
+                });
+            };
+        }
+
+        // --- Helper Functions ---
+
+        async function callGAS(action, payload) {
+            const body = JSON.stringify({ action: action, ...payload });
+            
+            // ใช้ fetch mode: 'no-cors' ไม่ได้ถ้าต้องการ response 
+            // แต่ GAS เราเขียน return JSON ไว้แล้ว
+            const response = await fetch(GAS_API_URL, {
+                method: 'POST',
+                body: body,
+                // headers: { "Content-Type": "text/plain;charset=utf-8" } // GAS บางทีชอบ text/plain
+            });
+            
+            return await response.json();
+        }
+
+        function hideAll() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('form-screen').classList.add('hidden');
+            document.getElementById('zoom-screen').classList.add('hidden');
+            document.getElementById('error-screen').classList.add('hidden');
+        }
+
+        function showError(msg) {
+            hideAll();
+            document.getElementById('error-screen').classList.remove('hidden');
+            document.getElementById('error-msg').innerText = msg;
+        }
+
+        // Run
+        main();
+
+    </script>
+</body>
+</html>
