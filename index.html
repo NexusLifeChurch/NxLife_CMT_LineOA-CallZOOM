@@ -6,6 +6,47 @@
     <title>NxLife Community Check-in</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        coffee: {
+                            50: '#f9f5f0',
+                            100: '#f0e6d6',
+                            200: '#dfcbb0',
+                            300: '#cbb08a',
+                            400: '#b49264',
+                            500: '#9d7647',
+                            600: '#7e5a37',
+                            700: '#6f4e37', // Coffee Bean
+                            800: '#4e3629',
+                            900: '#3d2b23',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out',
+                        'slide-up': 'slideUp 0.6s ease-out',
+                        'bounce-slight': 'bounceSlight 2s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        bounceSlight: {
+                            '0%, 100%': { transform: 'translateY(-3%)' },
+                            '50%': { transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- LIFF SDK -->
@@ -14,86 +55,107 @@
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
 
     <style>
-        body { font-family: 'Kanit', sans-serif; background-color: #f3f4f6; }
+        body { font-family: 'Kanit', sans-serif; background-color: #f0e6d6; }
         .hidden-el { display: none !important; }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
+        /* Custom Scrollbar if needed */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+        
+        .coffee-gradient {
+            background: linear-gradient(135deg, #6f4e37 0%, #a0522d 100%);
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .btn-gradient {
+            background: linear-gradient(to right, #6f4e37, #8b4513);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen flex items-center justify-center p-4 bg-[url('https://images.unsplash.com/photo-1447933601403-0c60889eeaf6?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80')] bg-cover bg-center bg-no-repeat bg-fixed relative">
+    
+    <!-- Overlay for better text readability -->
+    <div class="absolute inset-0 bg-black/30 backdrop-blur-sm z-0"></div>
 
     <!-- Container -->
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden relative min-h-[400px]">
+    <div class="glass-panel rounded-2xl shadow-2xl w-full max-w-md overflow-hidden relative min-h-[420px] z-10 animate-slide-up border border-white/20">
         
         <!-- Header / Decoration -->
-        <div class="h-2 bg-gradient-to-r from-blue-500 to-purple-600 w-full absolute top-0"></div>
+        <div class="h-3 coffee-gradient w-full absolute top-0 shadow-md"></div>
 
         <!-- 1. Loading State -->
-        <div id="loadingState" class="flex flex-col items-center justify-center h-full py-12">
-            <div class="loader mb-4"></div>
-            <p class="text-gray-500 animate-pulse">กำลังตรวจสอบข้อมูล...</p>
+        <div id="loadingState" class="flex flex-col items-center justify-center h-full py-16">
+            <div class="relative w-16 h-16 mb-4">
+                <div class="absolute inset-0 border-4 border-coffee-200 rounded-full animate-ping opacity-25"></div>
+                <div class="absolute inset-0 border-4 border-t-coffee-700 border-r-transparent border-b-coffee-700 border-l-transparent rounded-full animate-spin"></div>
+            </div>
+            <p class="text-coffee-800 font-medium tracking-wide animate-pulse">กำลังตรวจสอบข้อมูล...</p>
         </div>
 
         <!-- 2. ShowForm (Registration) -->
-        <div id="registerForm" class="p-6 hidden-el">
-            <div class="text-center mb-6">
-                <div class="relative w-24 h-24 mx-auto mb-4">
-                    <img id="userProfileImg" src="https://via.placeholder.com/150" alt="Profile" class="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md">
-                    <div class="absolute inset-0 rounded-full border border-gray-200"></div>
+        <div id="registerForm" class="p-8 hidden-el animate-fade-in">
+            <div class="text-center mb-8">
+                <div class="relative w-28 h-28 mx-auto mb-5 group">
+                    <img id="userProfileImg" src="https://via.placeholder.com/150" alt="Profile" class="w-28 h-28 rounded-full object-cover border-4 border-white shadow-lg group-hover:scale-105 transition-transform duration-300">
+                    <div class="absolute inset-0 rounded-full border border-gray-100/20"></div>
                 </div>
-                <h2 class="text-xl font-semibold text-gray-800">
-                    สวัสดี คุณ <span id="displayName" class="text-gray-500 italic">User</span>
+                <h2 class="text-2xl font-bold text-coffee-900 mb-1">
+                    สวัสดีครับ
                 </h2>
-                <p class="text-gray-600 mt-2 text-sm">สะดวกให้เราเรียกคุณว่าอะไรดีครับ?</p>
+                <h3 class="text-lg text-coffee-700 font-medium">
+                     คุณ <span id="displayName" class="italic border-b border-coffee-300">User</span>
+                </h3>
+                <p class="text-gray-500 mt-4 text-sm bg-coffee-50 inline-block px-4 py-1 rounded-full border border-coffee-100">สะดวกให้เราเรียกคุณว่าอะไรดีครับ?</p>
             </div>
 
-            <form id="profileForm" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อจริง-นามสกุล <span class="text-red-500">*</span></label>
-                    <input type="text" id="realName" placeholder="เช่น สมหญิง วงค์พระคริสต์" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" required>
+            <form id="profileForm" class="space-y-5" novalidate>
+                <div class="group">
+                    <label class="block text-sm font-semibold text-coffee-800 mb-2 pl-1">ชื่อจริง <span class="text-red-500">*</span></label>
+                    <input type="text" id="realName" placeholder="เช่น สมหญิง" class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-coffee-400 focus:border-coffee-400 outline-none transition shadow-sm group-hover:border-coffee-300 text-coffee-900 placeholder-gray-400">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อเล่น (ถ้ามี)</label>
-                    <input type="text" id="nickName" placeholder="เช่น ยาย่า อัลฟ่า7/1" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
+                <div class="group">
+                    <label class="block text-sm font-semibold text-coffee-800 mb-2 pl-1">ชื่อเล่น</label>
+                    <input type="text" id="nickName" placeholder="เช่น ยาย่า" class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-coffee-400 focus:border-coffee-400 outline-none transition shadow-sm group-hover:border-coffee-300 text-coffee-900 placeholder-gray-400">
                 </div>
                 
-                <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-3 rounded-lg shadow hover:opacity-90 transition transform active:scale-95">
-                    ยืนยันข้อมูลและเข้าสู่ระบบ
-                </button>
+                <div class="pt-2">
+                    <button type="submit" id="submitBtn" class="w-full btn-gradient text-white font-bold py-3.5 rounded-xl shadow-lg hover:shadow-xl hover:translate-y-[-2px] transition-all duration-300 transform active:scale-95 text-lg tracking-wide">
+                        ตกลง
+                    </button>
+                </div>
             </form>
         </div>
 
         <!-- 3. Redirect / Success State -->
-        <div id="redirectState" class="p-8 text-center hidden-el py-12">
-            <div class="mb-4 text-green-500">
-                <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div id="redirectState" class="p-8 text-center hidden-el py-16 animate-fade-in">
+            <div class="mb-6 relative inline-block">
+                <div class="absolute inset-0 bg-green-100 rounded-full animate-ping opacity-75"></div>
+                <div class="relative bg-white p-2 rounded-full shadow-md">
+                    <svg class="w-16 h-16 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
             </div>
-            <h3 class="text-lg font-bold text-gray-800 mb-2">กำลังเปิด ZOOM...</h3>
-            <p class="text-sm text-gray-500 mb-6">ระบบบันทึกการเข้าร่วมเรียบร้อยแล้ว</p>
+            <h3 class="text-xl font-bold text-coffee-900 mb-6">กำลังเปิด ZOOM...</h3>
+            <!-- Removed Success Text as requested -->
             
-            <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                <p class="text-xs text-yellow-800 mb-3">ในกรณีที่ ZOOM ไม่เปิดอัตโนมัติ ให้กดปุ่มด้านล่าง</p>
-                <button id="manualZoomBtn" class="w-full bg-blue-500 text-white font-semibold py-2 rounded shadow hover:bg-blue-600 transition">
-                    เข้า ZOOM
+            <div class="bg-coffee-50 p-5 rounded-xl border border-coffee-200 shadow-inner">
+                <p class="text-sm text-coffee-800 mb-3 font-medium">หาก ZOOM ไม่เปิดอัตโนมัติ</p>
+                <button id="manualZoomBtn" class="w-full bg-coffee-600 text-white font-semibold py-2.5 rounded-lg shadow hover:bg-coffee-700 transition duration-300 flex items-center justify-center gap-2">
+                    <span>กดปุ่มเพื่อเข้า ZOOM</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                 </button>
             </div>
-            <p id="countdownText" class="text-xs text-gray-400 mt-4">ปิดหน้านี้อัตโนมัติใน 30 วินาที</p>
+            <!-- Removed Countdown Text as requested -->
         </div>
 
         <!-- 4. Error State -->
-        <div id="errorState" class="p-8 text-center hidden-el py-12">
-            <div class="mb-4 text-red-500">
-                <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <div id="errorState" class="p-8 text-center hidden-el py-16 animate-fade-in">
+            <div class="mb-6 animate-bounce-slight">
+                <svg class="w-20 h-20 mx-auto text-red-400 drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
             </div>
-            <h3 id="errorTitle" class="text-lg font-bold text-gray-800">ข้อผิดพลาด</h3>
-            <p id="errorMessage" class="text-gray-600 mt-2 text-sm"></p>
+            <h3 id="errorTitle" class="text-xl font-bold text-gray-800 mb-2">ข้อผิดพลาด</h3>
+            <p id="errorMessage" class="text-gray-600 text-base leading-relaxed bg-red-50 p-3 rounded-lg border border-red-100"></p>
         </div>
 
     </div>
@@ -134,11 +196,10 @@
 
                 // 3. Logic Check
                 if (urlParams.Zopen !== '1') {
-                    // Case: Force Show Form
-                    await fetchBackendData(true); // Fetch just to get Zoom link, then show form
+                    // Case: Not 1 -> Force Show Form immediately WITHOUT Fetch
                     showRegisterForm();
                 } else {
-                    // Case: Check Time
+                    // Case: Zopen == 1 -> Check Time
                     if (checkTime(urlParams.Sdate, urlParams.Edate)) {
                         // Time OK -> Check User
                         await processUserCheck();
@@ -155,18 +216,12 @@
         // --- Logic Helpers ---
 
         function checkTime(sDateStr, eDateStr) {
-            // Assume format matches standard JS Date parsing or simple string check
-            // If empty, assume always open
             if (!sDateStr || !eDateStr) return true;
 
             const now = new Date();
-            // Try parsing dates. If format is custom, might need adjustment.
-            // Assuming ISO or standard 'YYYY-MM-DD HH:mm'
             const start = new Date(sDateStr);
             const end = new Date(eDateStr);
 
-            // If invalid date, assume logic OK (fail open) or Error (fail close)
-            // Here: Fail Open if parse error to avoid blocking users
             if (isNaN(start.getTime()) || isNaN(end.getTime())) return true;
 
             return now >= start && now <= end;
@@ -204,7 +259,6 @@
                 }
             } catch (err) {
                 console.error("Fetch Error:", err);
-                // Don't block UI if fetch fails, but functionality might be limited
                 return { isRegistered: false, zoomLink: "" };
             }
         }
@@ -219,17 +273,38 @@
             document.getElementById('userProfileImg').src = liffProfile.pictureUrl;
             document.getElementById('displayName').innerText = liffProfile.displayName;
 
-            // Form Submit Listener
+            // Form Submit Listener (Override default validation)
             document.getElementById('profileForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
+                
+                const realNameInput = document.getElementById('realName');
+                const realNameVal = realNameInput.value.trim();
+
+                // Custom Validation: Realname cannot be empty
+                if (!realNameVal) {
+                    Swal.fire({
+                        icon: 'question',
+                        title: 'อุ๊ย!',
+                        text: 'สะดวกให้เราเรียกคุณว่าอะไรดีครับ?',
+                        confirmButtonText: 'ตกลง',
+                        confirmButtonColor: '#6f4e37'
+                    });
+                    realNameInput.focus();
+                    return;
+                }
+
                 await submitRegistration();
             });
         }
 
         async function submitRegistration() {
             const btn = document.getElementById('submitBtn');
+            // Disable button but keep the text "ตกลง" (Maybe just dim it or add spinner without changing text too much as requested)
+            // Requirement: "ไม่ต้องขึ้นข้อความว่ากำลังบันทึกข้อมูล"
+            // So we just disable it to prevent double click, maybe show small spinner
             btn.disabled = true;
-            btn.innerHTML = '<span class="loader w-4 h-4 inline-block mr-2 border-2 border-white border-t-transparent"></span> กำลังบันทึก...';
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<svg class="animate-spin h-5 w-5 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
 
             const realName = document.getElementById('realName').value.trim();
             const nickName = document.getElementById('nickName').value.trim();
@@ -238,7 +313,7 @@
             const regName = nickName ? `${realName} [${nickName}]` : realName;
 
             try {
-                // Save to GAS
+                // Always Save to GAS first
                 await fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({
@@ -251,13 +326,19 @@
                     })
                 });
                 
-                // After save -> Go to Zoom logic
-                handleSuccessAndRedirect();
+                // After save logic
+                if (urlParams.Zopen === '1') {
+                    // Case Zopen=1: Log CheckIn & Go to Zoom
+                    handleSuccessAndRedirect();
+                } else {
+                    // Case Zopen!=1: Close immediately
+                    liff.closeWindow();
+                }
 
             } catch (err) {
                 Swal.fire('Error', 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่', 'error');
                 btn.disabled = false;
-                btn.innerText = 'ยืนยันข้อมูลและเข้าสู่ระบบ';
+                btn.innerHTML = originalText;
             }
         }
 
@@ -266,10 +347,10 @@
             document.getElementById('registerForm').classList.add('hidden-el');
             document.getElementById('redirectState').classList.remove('hidden-el');
 
-            // 1. Log Check-in (Background - No Await)
+            // 1. Log Check-in (Background)
             fetch(GAS_URL, {
                 method: 'POST',
-                mode: 'no-cors', // Fire and forget
+                mode: 'no-cors',
                 body: JSON.stringify({
                     action: 'checkIn',
                     userId: liffProfile.userId,
@@ -280,23 +361,27 @@
             // 2. Open Zoom
             launchZoom();
 
-            // 3. Auto Close Timer
+            // 3. Auto Close (No text shown, just action)
             setTimeout(() => {
                 liff.closeWindow();
-            }, 30000);
+            }, 5000); // 5 seconds to let them see "Opening Zoom" briefly or click manual button
         }
 
         function launchZoom() {
             const manualBtn = document.getElementById('manualZoomBtn');
             
             if (!zoomLink) {
+                // If no link, we can't open.
+                // But in Zopen=1 flow, we should have fetched it.
+                // If fetch failed or no link, show fallback.
+                manualBtn.disabled = true;
+                manualBtn.classList.add('opacity-50', 'cursor-not-allowed');
                 Swal.fire({
                     icon: 'info',
                     title: 'ขออภัย',
-                    text: 'เจ้าหน้าที่ยังไม่ได้กำหนด Link ZOOM สำหรับกิจกรรมนี้'
+                    text: 'เจ้าหน้าที่ยังไม่ได้กำหนด Link ZOOM สำหรับกิจกรรมนี้',
+                    confirmButtonColor: '#6f4e37'
                 });
-                manualBtn.disabled = true;
-                manualBtn.classList.add('bg-gray-400');
                 return;
             }
 
