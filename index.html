@@ -181,9 +181,10 @@
         const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwEPR9FARhVxyQu3_spLb47kue08an21zNlrpOb5Xg7-hr_4Ag3U726Wl-ICUTWY_F3nQ/exec"; 
         
         // ตัวแปร Global
-        let liffId = ""; // LIFF ID จะถูกดึงจาก URL โดยอัตโนมัติถ้าใช้ liff.line.me แต่ถ้าใช้ Endpoint ตรงๆ ต้องใส่
+        let liffId = ""; 
         let params = {};
         let lineProfile = {};
+        let targetZoomLink = ""; // ตัวแปรสำหรับเก็บ Link ที่ได้จาก Backend
 
         // เริ่มต้นการทำงาน
         async function main() {
@@ -196,13 +197,11 @@
                     return;
                 }
 
-                // 2. Parse Parameters
-                // ดึงจาก liff.state หรือ window.location.search
+                // 2. Parse Parameters (เปลี่ยนมาใช้ Act_ID)
                 const urlParams = new URLSearchParams(window.location.search);
                 params = {
                     Zopen: urlParams.get('Zopen'),
-                    Zid: urlParams.get('Zid'),
-                    Zpass: urlParams.get('Zpass'),
+                    Act_ID: urlParams.get('Act_ID'), // Parameter ใหม่
                     Activity: urlParams.get('Activity'),
                     Sdate: urlParams.get('Sdate'),
                     Edate: urlParams.get('Edate')
@@ -214,6 +213,11 @@
                     return;
                 }
 
+                if (!params.Act_ID) {
+                    showError("ไม่พบข้อมูล Act_ID");
+                    return;
+                }
+
                 if (!checkTime(params.Sdate, params.Edate)) {
                     showError("ยังไม่ถึงเวลานัดหมาย หรือ หมดเวลาแล้ว");
                     return;
@@ -222,11 +226,23 @@
                 // 4. ดึงข้อมูล User
                 lineProfile = await liff.getProfile();
                 
-                // 5. เรียก Backend เพื่อเช็คสถานะ
-                const checkResponse = await callGAS('checkUser', { userId: lineProfile.userId });
+                // 5. เรียก Backend เพื่อเช็คสถานะ และ ดึง ZOOM Link
+                const checkResponse = await callGAS('checkUser', { 
+                    userId: lineProfile.userId,
+                    actId: params.Act_ID // ส่ง Act_ID ไปให้ Backend หา Link
+                });
+
+                // ตรวจสอบว่าได้ Link มาหรือไม่
+                if (!checkResponse.zoomLink) {
+                    showError("ไม่พบลิงก์ ZOOM สำหรับ Activity ID นี้");
+                    return;
+                }
+
+                // เก็บ Link ไว้ในตัวแปร Global
+                targetZoomLink = checkResponse.zoomLink;
 
                 if (checkResponse.userExists && checkResponse.hasRegisterName) {
-                    // Case 1: ข้อมูลครบ -> เปิด Zoom เลย + Log CheckIN Background
+                    // Case 1: ข้อมูลครบ -> เปิด Zoom เลย
                     openZoomAndLog();
                 } else {
                     // Case 2: ข้อมูลไม่ครบ -> แสดงฟอร์ม
@@ -242,31 +258,19 @@
         // --- Logic Functions ---
 
         function checkTime(sDateStr, eDateStr) {
-            if (!sDateStr || !eDateStr) return true; // ถ้าไม่มีเวลามากำกับ ให้ผ่านได้เลย (Assumption)
-            
-            // Format รับเข้ามาควรเป็นแบบมาตรฐาน หรือ ISO 
-            // Assumption: Parameter ส่งมาเป็น String ที่ Date.parse อ่านได้ 
-            // หากส่งมาเป็น YYYY-MM-DD HH:mm ต้องระวังเรื่อง Timezone
-            
+            if (!sDateStr || !eDateStr) return true; 
             const now = new Date();
             const start = new Date(sDateStr);
             const end = new Date(eDateStr);
-
-            // กรณี Date Invalid ให้ผ่านไปก่อน หรือจะ Block ก็ได้ตาม Requirement
             if (isNaN(start.getTime()) || isNaN(end.getTime())) return true;
-
             return now >= start && now <= end;
         }
 
         function showForm() {
             hideAll();
             document.getElementById('form-screen').classList.remove('hidden');
-            
-            // Set User Info
             document.getElementById('user-profile-img').src = lineProfile.pictureUrl || "https://via.placeholder.com/50";
             document.getElementById('greeting-msg').innerText = `สวัสดี คุณ ${lineProfile.displayName}`;
-            
-            // Bind Event
             document.getElementById('btn-confirm').onclick = handleFormSubmit;
         }
 
@@ -284,12 +288,11 @@
                 return;
             }
 
-            // แสดง Loading ชั่วคราว หรือ เปลี่ยนข้อความปุ่ม
             const btn = document.getElementById('btn-confirm');
             btn.innerText = "กำลังบันทึก...";
             btn.disabled = true;
 
-            // ยิงไป Zoom เลยเพื่อความเร็ว
+            // ยิงไป Zoom เลย
             openZoom();
 
             // ส่งข้อมูลไปบันทึก Background
@@ -301,14 +304,11 @@
                 realName: realName,
                 nickName: nickName,
                 activity: params.Activity
-            }); // ไม่ต้อง await ผลลัพธ์
+            }); 
         }
 
         function openZoomAndLog() {
-            // ยิง Zoom เลย
             openZoom();
-            
-            // Log CheckIN Background
             callGAS('logCheckIn', {
                 userId: lineProfile.userId,
                 activity: params.Activity
@@ -319,8 +319,14 @@
             hideAll();
             document.getElementById('zoom-screen').classList.remove('hidden');
             
-            const zoomUrl = `https://zoom.us/j/${params.Zid}?pwd=${params.Zpass}`;
+            // ใช้ Link ที่ได้จาก Backend
+            const zoomUrl = targetZoomLink;
             
+            if (!zoomUrl) {
+                showError("เกิดข้อผิดพลาด: ไม่พบลิงก์ ZOOM");
+                return;
+            }
+
             // พยายามเปิดอัตโนมัติ
             liff.openWindow({
                 url: zoomUrl,
@@ -340,15 +346,10 @@
 
         async function callGAS(action, payload) {
             const body = JSON.stringify({ action: action, ...payload });
-            
-            // ใช้ fetch mode: 'no-cors' ไม่ได้ถ้าต้องการ response 
-            // แต่ GAS เราเขียน return JSON ไว้แล้ว
             const response = await fetch(GAS_API_URL, {
                 method: 'POST',
                 body: body,
-                // headers: { "Content-Type": "text/plain;charset=utf-8" } // GAS บางทีชอบ text/plain
             });
-            
             return await response.json();
         }
 
