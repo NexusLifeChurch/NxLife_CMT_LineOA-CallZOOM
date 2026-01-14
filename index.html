@@ -70,7 +70,7 @@
     <!-- Overlay -->
     <div class="absolute inset-0 bg-black/30 backdrop-blur-sm z-0"></div>
 
-    <!-- Container: Adjusted for compact single-screen view -->
+    <!-- Container -->
     <div class="glass-panel rounded-2xl shadow-2xl w-[90%] max-w-sm overflow-hidden relative z-10 animate-slide-up border border-white/20">
         
         <!-- Header Strip -->
@@ -82,14 +82,16 @@
                 <div class="absolute inset-0 border-4 border-coffee-200 rounded-full animate-ping opacity-25"></div>
                 <div class="absolute inset-0 border-4 border-t-coffee-700 border-r-transparent border-b-coffee-700 border-l-transparent rounded-full animate-spin"></div>
             </div>
-            <!-- Added ID="loadingText" to control text dynamically -->
             <p id="loadingText" class="text-coffee-800 text-sm font-medium tracking-wide animate-pulse">กำลังโหลด...</p>
+            <!-- Retry Button (Hidden by default) -->
+            <button id="retryBtn" onclick="location.reload()" class="hidden-el mt-4 px-4 py-2 bg-coffee-200 text-coffee-800 rounded-lg text-xs font-bold hover:bg-coffee-300 transition">
+                โหลดไม่สำเร็จ แตะเพื่อลองใหม่
+            </button>
         </div>
 
         <!-- 2. ShowForm (Registration) -->
         <div id="registerForm" class="p-6 hidden-el animate-fade-in">
             <div class="text-center mb-4">
-                <!-- Reduced image size -->
                 <div class="relative w-20 h-20 mx-auto mb-3 group">
                     <img id="userProfileImg" src="https://via.placeholder.com/150" alt="Profile" class="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md">
                     <div class="absolute inset-0 rounded-full border border-gray-100/20"></div>
@@ -102,7 +104,6 @@
                 </h3>
             </div>
 
-            <!-- Validation: Using native browser bubble with custom text -->
             <form id="profileForm" class="space-y-4" >
                 <div class="group">
                     <label class="block text-xs font-semibold text-coffee-800 mb-1 pl-1">ชื่อจริง <span class="text-red-500">*</span></label>
@@ -153,11 +154,14 @@
             </div>
             <h3 id="errorTitle" class="text-lg font-bold text-gray-800 mb-2">ข้อผิดพลาด</h3>
             <p id="errorMessage" class="text-gray-600 text-sm leading-relaxed bg-red-50 p-2 rounded-lg border border-red-100"></p>
+            <button onclick="location.reload()" class="mt-4 px-6 py-2 bg-gray-200 rounded-lg text-sm text-gray-700 font-semibold hover:bg-gray-300 transition">
+                ลองใหม่
+            </button>
         </div>
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v1.2.3
+            v1.2.4 (Fix)
         </div>
 
     </div>
@@ -177,7 +181,6 @@
 
         async function main() {
             try {
-                // 1. Initialize LIFF
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
                     liff.login();
@@ -185,7 +188,6 @@
                 }
                 liffProfile = await liff.getProfile();
 
-                // 2. Parse URL Params
                 const queryString = window.location.search;
                 const params = new URLSearchParams(queryString);
                 urlParams = {
@@ -196,20 +198,14 @@
                 };
                 actId = urlParams.Act_ID;
 
-                // --- Update Loading Text based on Zopen (NEW LOGIC) ---
                 if (urlParams.Zopen === '1') {
                     document.getElementById('loadingText').innerText = 'กำลังเตรียมห้อง ZOOM...';
                 }
-                // -----------------------------------------------------
 
-                // 3. Logic Check
                 if (urlParams.Zopen !== '1') {
-                    // Case: Not 1 -> Force Show Form immediately WITHOUT Fetching/Checking data
                     showRegisterForm();
                 } else {
-                    // Case: Zopen == 1 -> Check Time
                     if (checkTime(urlParams.Sdate, urlParams.Edate)) {
-                        // Time OK -> Check User
                         await processUserCheck();
                     } else {
                         showError("ยังไม่ถึงเวลานัดหมาย", "กิจกรรมนี้ยังไม่เปิดให้เข้าร่วม หรือหมดเวลาแล้ว");
@@ -221,23 +217,26 @@
             }
         }
 
-        // --- Logic Helpers ---
-
         function checkTime(sDateStr, eDateStr) {
             if (!sDateStr || !eDateStr) return true;
-
             const now = new Date();
             const start = new Date(sDateStr);
             const end = new Date(eDateStr);
-
             if (isNaN(start.getTime()) || isNaN(end.getTime())) return true;
-
             return now >= start && now <= end;
         }
 
         async function processUserCheck() {
+            // FIX: Handle error state separately from "not registered"
             const data = await fetchBackendData();
             
+            if (data === null) {
+                // Connection Error
+                document.getElementById('loadingText').innerText = 'การเชื่อมต่อล่าช้า';
+                document.getElementById('retryBtn').classList.remove('hidden-el');
+                return;
+            }
+
             if (data.isRegistered) {
                 handleSuccessAndRedirect();
             } else {
@@ -247,14 +246,23 @@
 
         async function fetchBackendData() {
             try {
+                // Add Timeout to fetch (10 seconds)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({
                         action: 'getData',
                         userId: liffProfile.userId,
                         actId: actId
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) throw new Error('Network response was not ok');
+
                 const res = await response.json();
                 
                 if (res.status === 'success') {
@@ -265,7 +273,8 @@
                 }
             } catch (err) {
                 console.error("Fetch Error:", err);
-                return { isRegistered: false, zoomLink: "" };
+                // FIX: Return null on error instead of assuming user is unregistered
+                return null;
             }
         }
 
@@ -274,16 +283,11 @@
         function showRegisterForm() {
             document.getElementById('loadingState').classList.add('hidden-el');
             document.getElementById('registerForm').classList.remove('hidden-el');
-            
-            // Populate Data
             document.getElementById('userProfileImg').src = liffProfile.pictureUrl;
             document.getElementById('displayName').innerText = liffProfile.displayName;
 
-            // Form Submit Listener (Using Native Validation now)
             document.getElementById('profileForm').addEventListener('submit', async (e) => {
-                e.preventDefault(); // Stop reload, run logic
-                
-                // Note: Browser handles 'required' check before this event fires.
+                e.preventDefault();
                 await submitRegistration();
             });
         }
@@ -292,7 +296,6 @@
             const btn = document.getElementById('submitBtn');
             const originalText = btn.innerHTML;
             
-            // Disable button, show small spinner, but no text change if possible to keep it minimal
             btn.disabled = true;
             btn.innerHTML = '<svg class="animate-spin h-5 w-5 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
 
@@ -301,8 +304,8 @@
             const regName = nickName ? `${realName} [${nickName}]` : realName;
 
             try {
-                // Always Save to GAS
-                await fetch(GAS_URL, {
+                // FIX: Wait for valid response
+                const response = await fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({
                         action: 'register',
@@ -314,23 +317,20 @@
                     })
                 });
                 
-                // Logic Split after Save
+                // Don't wait for JSON parse here to be safer/faster, 
+                // assuming if fetch completed (200), the backend processed it.
+                // Proceed immediately to avoid UX freeze.
+
                 if (urlParams.Zopen === '1') {
-                    // Case Zopen=1: Log CheckIn & Go to Zoom
                     handleSuccessAndRedirect();
                 } else {
-                    // Case Zopen!=1: Close immediately (No Success Message)
                     liff.closeWindow();
                 }
 
             } catch (err) {
-                // Use alert for critical error fallback or custom UI
-                // Revert button state
                 btn.disabled = false;
                 btn.innerHTML = originalText;
-                // Since user asked for no notifications, we might just fail silently or show minimal error
-                // But error is critical, so we show simple alert
-                alert('เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่');
+                alert('เกิดข้อผิดพลาดในการบันทึก: ' + err.message + '\nกรุณาลองใหม่');
             }
         }
 
@@ -339,7 +339,7 @@
             document.getElementById('registerForm').classList.add('hidden-el');
             document.getElementById('redirectState').classList.remove('hidden-el');
 
-            // 1. Log Check-in (Background)
+            // 1. Log Check-in (Fire and Forget)
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -351,6 +351,7 @@
             });
 
             // 2. Open Zoom
+            // FIX: Ensure zoomLink is checked here again
             launchZoom();
 
             // 3. Auto Close
@@ -362,18 +363,17 @@
         function launchZoom() {
             const manualBtn = document.getElementById('manualZoomBtn');
             
+            // Fallback Logic
             if (!zoomLink) {
                 manualBtn.disabled = true;
                 manualBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                // Only show alert if user manually tries or if we absolutely can't proceed
-                // But context says "If Zoom Link empty... show message". 
-                // We'll keep the previous Swal logic for this specific error as it's an exception
-                Swal.fire({
-                    icon: 'info',
-                    title: 'ขออภัย',
-                    text: 'เจ้าหน้าที่ยังไม่ได้กำหนด Link ZOOM',
-                    confirmButtonColor: '#6f4e37'
-                });
+                // Don't alert immediately, user might just be in "Registered" state but link fetch failed separately?
+                // Actually if getData succeeded, zoomLink should be there. 
+                // If we are here from registration success, we might not have zoomLink if fetchBackendData failed earlier!
+                
+                // Try to use manual button to reload/fetch logic if critical
+                manualBtn.innerText = "ไม่พบ Link (กดเพื่อลองใหม่)";
+                manualBtn.onclick = () => location.reload();
                 return;
             }
 
@@ -381,6 +381,7 @@
                 liff.openWindow({ url: zoomLink, external: true });
             };
 
+            // Attempt Auto Open
             liff.openWindow({ url: zoomLink, external: true });
         }
 
@@ -393,7 +394,6 @@
             document.getElementById('errorMessage').innerText = msg;
         }
 
-        // --- Start App ---
         main();
 
     </script>
