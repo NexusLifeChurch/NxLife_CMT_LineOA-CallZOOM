@@ -85,7 +85,7 @@
             <p id="loadingText" class="text-coffee-800 text-sm font-medium tracking-wide animate-pulse">กำลังโหลด...</p>
             <!-- Retry Button (Hidden by default) -->
             <button id="retryBtn" onclick="location.reload()" class="hidden-el mt-4 px-4 py-2 bg-coffee-200 text-coffee-800 rounded-lg text-xs font-bold hover:bg-coffee-300 transition">
-                โหลดไม่สำเร็จ แตะเพื่อลองใหม่
+                แตะเพื่อลองใหม่
             </button>
         </div>
 
@@ -161,7 +161,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v1.2.4 (Fix)
+            v1.2.6 (Silent)
         </div>
 
     </div>
@@ -218,20 +218,25 @@
         }
 
         function checkTime(sDateStr, eDateStr) {
-            if (!sDateStr || !eDateStr) return true;
+            // Be stricter with time checks. If dates are invalid, BLOCK access (return false)
+            if (!sDateStr || !eDateStr) return true; // Keep open if no dates specified
+            
             const now = new Date();
             const start = new Date(sDateStr);
             const end = new Date(eDateStr);
-            if (isNaN(start.getTime()) || isNaN(end.getTime())) return true;
+
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                console.error("Invalid Date Parameters");
+                return false; 
+            }
+            
             return now >= start && now <= end;
         }
 
         async function processUserCheck() {
-            // FIX: Handle error state separately from "not registered"
             const data = await fetchBackendData();
             
             if (data === null) {
-                // Connection Error
                 document.getElementById('loadingText').innerText = 'การเชื่อมต่อล่าช้า';
                 document.getElementById('retryBtn').classList.remove('hidden-el');
                 return;
@@ -246,7 +251,6 @@
 
         async function fetchBackendData() {
             try {
-                // Add Timeout to fetch (10 seconds)
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -273,7 +277,6 @@
                 }
             } catch (err) {
                 console.error("Fetch Error:", err);
-                // FIX: Return null on error instead of assuming user is unregistered
                 return null;
             }
         }
@@ -304,7 +307,7 @@
             const regName = nickName ? `${realName} [${nickName}]` : realName;
 
             try {
-                // FIX: Wait for valid response
+                // 1. Submit Registration
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({
@@ -317,9 +320,20 @@
                     })
                 });
                 
-                // Don't wait for JSON parse here to be safer/faster, 
-                // assuming if fetch completed (200), the backend processed it.
-                // Proceed immediately to avoid UX freeze.
+                // 2. Double Check & Fetch Link if missing (Prevention for "Hangs")
+                // If Zopen=1 but we don't have zoomLink (maybe first fetch failed?), try getting it now.
+                if (urlParams.Zopen === '1' && !zoomLink) {
+                   try {
+                       const linkRes = await fetch(GAS_URL, {
+                           method: 'POST',
+                           body: JSON.stringify({ action: 'getData', userId: liffProfile.userId, actId: actId })
+                       });
+                       const linkJson = await linkRes.json();
+                       if (linkJson.status === 'success') {
+                           zoomLink = linkJson.data.zoomLink;
+                       }
+                   } catch (ignore) {}
+                }
 
                 if (urlParams.Zopen === '1') {
                     handleSuccessAndRedirect();
@@ -328,9 +342,11 @@
                 }
 
             } catch (err) {
+                // Silent Fail: Just reset button so they can try again
+                console.error("Submit Error", err);
                 btn.disabled = false;
                 btn.innerHTML = originalText;
-                alert('เกิดข้อผิดพลาดในการบันทึก: ' + err.message + '\nกรุณาลองใหม่');
+                // Removed Swal.fire as requested
             }
         }
 
@@ -351,7 +367,6 @@
             });
 
             // 2. Open Zoom
-            // FIX: Ensure zoomLink is checked here again
             launchZoom();
 
             // 3. Auto Close
@@ -365,15 +380,15 @@
             
             // Fallback Logic
             if (!zoomLink) {
-                manualBtn.disabled = true;
-                manualBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                // Don't alert immediately, user might just be in "Registered" state but link fetch failed separately?
-                // Actually if getData succeeded, zoomLink should be there. 
-                // If we are here from registration success, we might not have zoomLink if fetchBackendData failed earlier!
+                manualBtn.disabled = false; // Enabled so user can try to reload
+                manualBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                manualBtn.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
                 
-                // Try to use manual button to reload/fetch logic if critical
-                manualBtn.innerText = "ไม่พบ Link (กดเพื่อลองใหม่)";
+                manualBtn.innerText = "ไม่พบ Link (กดเพื่อรีโหลด)";
                 manualBtn.onclick = () => location.reload();
+                
+                // Silent console log instead of popup
+                console.warn("Zoom Link missing");
                 return;
             }
 
