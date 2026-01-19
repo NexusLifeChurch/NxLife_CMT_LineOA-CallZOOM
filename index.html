@@ -83,7 +83,6 @@
                 <div class="absolute inset-0 border-4 border-t-coffee-700 border-r-transparent border-b-coffee-700 border-l-transparent rounded-full animate-spin"></div>
             </div>
             <p id="loadingText" class="text-coffee-800 text-sm font-medium tracking-wide animate-pulse">กำลังโหลด...</p>
-            <!-- Retry Button (Hidden by default) -->
             <button id="retryBtn" onclick="location.reload()" class="hidden-el mt-4 px-4 py-2 bg-coffee-200 text-coffee-800 rounded-lg text-xs font-bold hover:bg-coffee-300 transition">
                 แตะเพื่อลองใหม่
             </button>
@@ -137,7 +136,6 @@
                     <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
             </div>
-            <!-- Changed text to be more action-oriented for browser users -->
             <h3 class="text-lg font-bold text-coffee-900 mb-4">พร้อมเข้าร่วมกิจกรรมแล้ว</h3>
             
             <div class="bg-coffee-50 p-4 rounded-xl border border-coffee-200 shadow-inner">
@@ -162,7 +160,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v1.2.7 (Browser Fix)
+            v2.0 (Full Stack Optimize)
         </div>
 
     </div>
@@ -175,17 +173,16 @@
         // --- Variables ---
         let liffProfile = {};
         let urlParams = {};
-        let zoomLink = "";
+        let zoomLink = ""; 
         let actId = "";
 
         // --- Core Functions ---
 
         async function main() {
             try {
-                // Initialize LIFF first to ensure we have userId for any logic
+                // Initialize LIFF
                 await liff.init({ liffId: LIFF_ID });
                 
-                // For Browser: This triggers redirect if not logged in.
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return;
@@ -208,12 +205,9 @@
                 }
 
                 if (urlParams.Zopen !== '1') {
-                    // Force Show Form logic
                     showRegisterForm();
                 } else {
-                    // Check Time
                     if (checkTime(urlParams.Sdate, urlParams.Edate)) {
-                        // Check User Status
                         await processUserCheck();
                     } else {
                         showError("ยังไม่ถึงเวลานัดหมาย", "กิจกรรมนี้ยังไม่เปิดให้เข้าร่วม หรือหมดเวลาแล้ว");
@@ -227,16 +221,10 @@
 
         function checkTime(sDateStr, eDateStr) {
             if (!sDateStr || !eDateStr) return true;
-            
             const now = new Date();
             const start = new Date(sDateStr);
             const end = new Date(eDateStr);
-
-            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-                console.error("Invalid Date Parameters");
-                return false; 
-            }
-            
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) { return false; }
             return now >= start && now <= end;
         }
 
@@ -244,17 +232,16 @@
             const data = await fetchBackendData();
             
             if (data === null) {
-                // Network error - Show Retry instead of assuming unregistered
                 document.getElementById('loadingText').innerText = 'การเชื่อมต่อล่าช้า';
                 document.getElementById('retryBtn').classList.remove('hidden-el');
                 return;
             }
 
+            if (data.zoomLink) { zoomLink = data.zoomLink; }
+
             if (data.isRegistered) {
-                // Case 2 -> 4 (Registered)
                 handleSuccessAndRedirect();
             } else {
-                // Case 2 -> 3 (Not Registered)
                 showRegisterForm();
             }
         }
@@ -262,7 +249,7 @@
         async function fetchBackendData() {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 12000); // Increased timeout for browser
+                const timeoutId = setTimeout(() => controller.abort(), 12000); 
 
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
@@ -275,15 +262,13 @@
                 });
                 clearTimeout(timeoutId);
 
-                if (!response.ok) throw new Error('Network response was not ok');
-
+                if (!response.ok) throw new Error('Network error');
                 const res = await response.json();
                 
                 if (res.status === 'success') {
-                    zoomLink = res.data.zoomLink;
                     return res.data;
                 } else {
-                    throw new Error(res.message);
+                    return null;
                 }
             } catch (err) {
                 console.error("Fetch Error:", err);
@@ -291,15 +276,17 @@
             }
         }
 
-        // --- UI Handling ---
-
         function showRegisterForm() {
             document.getElementById('loadingState').classList.add('hidden-el');
             document.getElementById('registerForm').classList.remove('hidden-el');
             document.getElementById('userProfileImg').src = liffProfile.pictureUrl;
             document.getElementById('displayName').innerText = liffProfile.displayName;
 
-            document.getElementById('profileForm').addEventListener('submit', async (e) => {
+            const form = document.getElementById('profileForm');
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 await submitRegistration();
             });
@@ -316,36 +303,41 @@
             const nickName = document.getElementById('nickName').value.trim();
             const regName = nickName ? `${realName} [${nickName}]` : realName;
 
+            const payload = {
+                action: 'register',
+                userId: liffProfile.userId,
+                displayName: liffProfile.displayName,
+                pictureUrl: liffProfile.pictureUrl,
+                statusMessage: liffProfile.statusMessage,
+                regName: regName,
+                actId: actId // ส่ง ActID ไปด้วย เพื่อขอ Link Zoom กลับมาเลย
+            };
+
+            const fetchPromise = fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            // 5s Timeout fallback
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(() => resolve({ timeout: true }), 5000); 
+            });
+
             try {
-                // 1. Submit Registration
-                await fetch(GAS_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'register',
-                        userId: liffProfile.userId,
-                        displayName: liffProfile.displayName,
-                        pictureUrl: liffProfile.pictureUrl,
-                        statusMessage: liffProfile.statusMessage,
-                        regName: regName
-                    })
-                });
+                // Race between Fetch and Timeout
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
                 
-                // 2. Fetch Zoom Link (Robustness check)
-                if (urlParams.Zopen === '1' && !zoomLink) {
-                   try {
-                       const linkRes = await fetch(GAS_URL, {
-                           method: 'POST',
-                           body: JSON.stringify({ action: 'getData', userId: liffProfile.userId, actId: actId })
-                       });
-                       const linkJson = await linkRes.json();
-                       if (linkJson.status === 'success') {
-                           zoomLink = linkJson.data.zoomLink;
-                       }
-                   } catch (ignore) {}
+                if (response.timeout) {
+                    console.warn("Fetch timed out, proceeding anyway");
+                } else {
+                    const resJson = await response.json();
+                    if (resJson.status === 'success' && resJson.data.zoomLink) {
+                        // เก็บ Zoom Link ที่ Backend ส่งกลับมาให้ทันที!
+                        zoomLink = resJson.data.zoomLink;
+                    }
                 }
 
-                // 3. COMPLETE SUCCESS - SHOW UI IMMEDIATELY
-                // Important for Browser: Show the UI first, THEN try to auto-open.
+                // Proceed logic
                 if (urlParams.Zopen === '1') {
                     handleSuccessAndRedirect();
                 } else {
@@ -353,20 +345,22 @@
                 }
 
             } catch (err) {
-                // Error handling (Silent)
                 console.error("Submit Error", err);
-                btn.disabled = false;
-                btn.innerHTML = originalText;
+                if (urlParams.Zopen === '1') {
+                    handleSuccessAndRedirect(); 
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
             }
         }
 
         function handleSuccessAndRedirect() {
-            // Case 4: Open Zoom & Log Check-in
             document.getElementById('loadingState').classList.add('hidden-el');
             document.getElementById('registerForm').classList.add('hidden-el');
-            document.getElementById('redirectState').classList.remove('hidden-el'); // Show Success UI first!
+            document.getElementById('redirectState').classList.remove('hidden-el');
 
-            // 1. Log Check-in (Background)
+            // 1. Check-in (Fire & Forget)
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -377,31 +371,22 @@
                 })
             });
 
-            // 2. Prepare Zoom Launch
-            // Ensure button is ready for manual click (Popup Blocker fallback)
+            // 2. Open Zoom Logic
             const manualBtn = document.getElementById('manualZoomBtn');
+            
             if (zoomLink) {
                 manualBtn.onclick = () => liff.openWindow({ url: zoomLink, external: true });
-                
-                // 3. Attempt Auto Open
-                // Note: This might be blocked in Browser, but since the UI is already shown,
-                // the user can just click the button.
                 liff.openWindow({ url: zoomLink, external: true });
             } else {
-                manualBtn.innerText = "ไม่พบ Link (กดเพื่อรีโหลด)";
+                manualBtn.innerText = "กำลังเชื่อมต่อ... (กดเพื่อรีโหลด)";
                 manualBtn.onclick = () => location.reload();
             }
-
-            // 4. Auto Close (Optional, usually better to leave open in browser so they can click retry)
-            // Removed auto-close for better browser UX, or keep it long enough
-            // setTimeout(() => liff.closeWindow(), 10000); 
         }
 
         function showError(title, msg) {
             document.getElementById('loadingState').classList.add('hidden-el');
             document.getElementById('registerForm').classList.add('hidden-el');
             document.getElementById('errorState').classList.remove('hidden-el');
-            
             document.getElementById('errorTitle').innerText = title;
             document.getElementById('errorMessage').innerText = msg;
         }
