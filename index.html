@@ -137,12 +137,13 @@
                     <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                 </div>
             </div>
-            <h3 class="text-lg font-bold text-coffee-900 mb-4">กำลังเปิด ZOOM...</h3>
+            <!-- Changed text to be more action-oriented for browser users -->
+            <h3 class="text-lg font-bold text-coffee-900 mb-4">พร้อมเข้าร่วมกิจกรรมแล้ว</h3>
             
             <div class="bg-coffee-50 p-4 rounded-xl border border-coffee-200 shadow-inner">
-                <p class="text-xs text-coffee-800 mb-2 font-medium">หาก ZOOM ไม่เปิดอัตโนมัติให้กดที่นี่</p>
-                <button id="manualZoomBtn" class="w-full bg-coffee-600 text-white font-semibold py-2 rounded-lg shadow hover:bg-coffee-700 transition duration-300 flex items-center justify-center gap-2 text-sm">
-                    <span>เข้า ZOOM</span>
+                <p class="text-xs text-coffee-800 mb-2 font-medium">ระบบกำลังเปิดห้องประชุม...</p>
+                <button id="manualZoomBtn" class="w-full bg-coffee-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-coffee-700 transition duration-300 flex items-center justify-center gap-2 text-sm animate-pulse">
+                    <span>คลิกที่นี่เพื่อเข้า ZOOM</span>
                 </button>
             </div>
         </div>
@@ -161,7 +162,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v1.2.6 (Silent)
+            v1.2.7 (Browser Fix)
         </div>
 
     </div>
@@ -181,11 +182,15 @@
 
         async function main() {
             try {
+                // Initialize LIFF first to ensure we have userId for any logic
                 await liff.init({ liffId: LIFF_ID });
+                
+                // For Browser: This triggers redirect if not logged in.
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return;
                 }
+                
                 liffProfile = await liff.getProfile();
 
                 const queryString = window.location.search;
@@ -203,9 +208,12 @@
                 }
 
                 if (urlParams.Zopen !== '1') {
+                    // Force Show Form logic
                     showRegisterForm();
                 } else {
+                    // Check Time
                     if (checkTime(urlParams.Sdate, urlParams.Edate)) {
+                        // Check User Status
                         await processUserCheck();
                     } else {
                         showError("ยังไม่ถึงเวลานัดหมาย", "กิจกรรมนี้ยังไม่เปิดให้เข้าร่วม หรือหมดเวลาแล้ว");
@@ -218,8 +226,7 @@
         }
 
         function checkTime(sDateStr, eDateStr) {
-            // Be stricter with time checks. If dates are invalid, BLOCK access (return false)
-            if (!sDateStr || !eDateStr) return true; // Keep open if no dates specified
+            if (!sDateStr || !eDateStr) return true;
             
             const now = new Date();
             const start = new Date(sDateStr);
@@ -237,14 +244,17 @@
             const data = await fetchBackendData();
             
             if (data === null) {
+                // Network error - Show Retry instead of assuming unregistered
                 document.getElementById('loadingText').innerText = 'การเชื่อมต่อล่าช้า';
                 document.getElementById('retryBtn').classList.remove('hidden-el');
                 return;
             }
 
             if (data.isRegistered) {
+                // Case 2 -> 4 (Registered)
                 handleSuccessAndRedirect();
             } else {
+                // Case 2 -> 3 (Not Registered)
                 showRegisterForm();
             }
         }
@@ -252,7 +262,7 @@
         async function fetchBackendData() {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const timeoutId = setTimeout(() => controller.abort(), 12000); // Increased timeout for browser
 
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
@@ -308,7 +318,7 @@
 
             try {
                 // 1. Submit Registration
-                const response = await fetch(GAS_URL, {
+                await fetch(GAS_URL, {
                     method: 'POST',
                     body: JSON.stringify({
                         action: 'register',
@@ -320,8 +330,7 @@
                     })
                 });
                 
-                // 2. Double Check & Fetch Link if missing (Prevention for "Hangs")
-                // If Zopen=1 but we don't have zoomLink (maybe first fetch failed?), try getting it now.
+                // 2. Fetch Zoom Link (Robustness check)
                 if (urlParams.Zopen === '1' && !zoomLink) {
                    try {
                        const linkRes = await fetch(GAS_URL, {
@@ -335,6 +344,8 @@
                    } catch (ignore) {}
                 }
 
+                // 3. COMPLETE SUCCESS - SHOW UI IMMEDIATELY
+                // Important for Browser: Show the UI first, THEN try to auto-open.
                 if (urlParams.Zopen === '1') {
                     handleSuccessAndRedirect();
                 } else {
@@ -342,20 +353,20 @@
                 }
 
             } catch (err) {
-                // Silent Fail: Just reset button so they can try again
+                // Error handling (Silent)
                 console.error("Submit Error", err);
                 btn.disabled = false;
                 btn.innerHTML = originalText;
-                // Removed Swal.fire as requested
             }
         }
 
         function handleSuccessAndRedirect() {
+            // Case 4: Open Zoom & Log Check-in
             document.getElementById('loadingState').classList.add('hidden-el');
             document.getElementById('registerForm').classList.add('hidden-el');
-            document.getElementById('redirectState').classList.remove('hidden-el');
+            document.getElementById('redirectState').classList.remove('hidden-el'); // Show Success UI first!
 
-            // 1. Log Check-in (Fire and Forget)
+            // 1. Log Check-in (Background)
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -366,38 +377,24 @@
                 })
             });
 
-            // 2. Open Zoom
-            launchZoom();
-
-            // 3. Auto Close
-            setTimeout(() => {
-                liff.closeWindow();
-            }, 5000);
-        }
-
-        function launchZoom() {
+            // 2. Prepare Zoom Launch
+            // Ensure button is ready for manual click (Popup Blocker fallback)
             const manualBtn = document.getElementById('manualZoomBtn');
-            
-            // Fallback Logic
-            if (!zoomLink) {
-                manualBtn.disabled = false; // Enabled so user can try to reload
-                manualBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                manualBtn.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+            if (zoomLink) {
+                manualBtn.onclick = () => liff.openWindow({ url: zoomLink, external: true });
                 
+                // 3. Attempt Auto Open
+                // Note: This might be blocked in Browser, but since the UI is already shown,
+                // the user can just click the button.
+                liff.openWindow({ url: zoomLink, external: true });
+            } else {
                 manualBtn.innerText = "ไม่พบ Link (กดเพื่อรีโหลด)";
                 manualBtn.onclick = () => location.reload();
-                
-                // Silent console log instead of popup
-                console.warn("Zoom Link missing");
-                return;
             }
 
-            manualBtn.onclick = () => {
-                liff.openWindow({ url: zoomLink, external: true });
-            };
-
-            // Attempt Auto Open
-            liff.openWindow({ url: zoomLink, external: true });
+            // 4. Auto Close (Optional, usually better to leave open in browser so they can click retry)
+            // Removed auto-close for better browser UX, or keep it long enough
+            // setTimeout(() => liff.closeWindow(), 10000); 
         }
 
         function showError(title, msg) {
