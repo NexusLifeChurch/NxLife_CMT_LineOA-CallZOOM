@@ -139,11 +139,13 @@
             <h3 class="text-lg font-bold text-coffee-900 mb-4">พร้อมเข้าร่วมกิจกรรมแล้ว</h3>
             
             <div class="bg-coffee-50 p-4 rounded-xl border border-coffee-200 shadow-inner">
-                <p class="text-xs text-coffee-800 mb-2 font-medium">ระบบกำลังเปิดห้องประชุม...</p>
+                <p class="text-xs text-coffee-800 mb-2 font-medium">ระบบจะเปิดห้องประชุมอัตโนมัติ... หากไม่เปิดกรุณากดข้างล่างนี้</p>
                 <button id="manualZoomBtn" class="w-full bg-coffee-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-coffee-700 transition duration-300 flex items-center justify-center gap-2 text-sm animate-pulse">
                     <span>คลิกที่นี่เพื่อเข้า ZOOM</span>
                 </button>
             </div>
+            <!-- Added countdown text for clarity -->
+            <p class="text-[10px] text-gray-400 mt-3 font-light">หน้านี้จะปิดอัตโนมัติใน 30 วินาที</p>
         </div>
 
         <!-- 4. Error State -->
@@ -160,7 +162,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v2.0 (Full Stack Optimize)
+            v2.2 (AutoClose)
         </div>
 
     </div>
@@ -381,6 +383,11 @@
                 manualBtn.innerText = "กำลังเชื่อมต่อ... (กดเพื่อรีโหลด)";
                 manualBtn.onclick = () => location.reload();
             }
+
+            // 3. Auto Close Timer (Added feature)
+            setTimeout(() => {
+                liff.closeWindow();
+            }, 30000); // 30 seconds
         }
 
         function showError(title, msg) {
