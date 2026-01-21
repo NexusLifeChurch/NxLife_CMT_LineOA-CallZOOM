@@ -161,7 +161,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v2.4 (Msg-Update)
+            v2.6 (Global Timezone)
         </div>
 
     </div>
@@ -191,7 +191,11 @@
                 
                 liffProfile = await liff.getProfile();
 
-                // Get Params
+                // Validation
+                if (!liffProfile || !liffProfile.userId) {
+                    throw new Error("ไม่สามารถดึงข้อมูล UserID ได้ กรุณาลองใหม่");
+                }
+
                 const queryString = window.location.search;
                 const params = new URLSearchParams(queryString);
                 urlParams = {
@@ -208,25 +212,28 @@
                 }
 
                 // --- LOGIC FLOW CHECK ---
-                // 1. Check Zopen flag
                 if (urlParams.Zopen !== '1') {
                     showRegisterForm();
                 } else {
-                    // 2. Check Time
                     if (checkTime(urlParams.Sdate, urlParams.Edate)) {
-                        // 3. Check User Status
                         await processUserCheck();
                     } else {
-                        // Error handling is done inside checkTime's else block logic (moved here for message construction)
-                        // But wait, checkTime returns boolean.
-                        // I need to format the message here.
-                        
-                        let dateMsg = "";
+                         let dateMsg = "";
                         try {
                             const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-                            const start = new Date(urlParams.Sdate).toLocaleDateString('th-TH', options);
-                            const end = new Date(urlParams.Edate).toLocaleDateString('th-TH', options);
-                            dateMsg = `<br><span class="text-xs font-normal mt-2 block text-gray-500">กิจกรรมนี้เปิดให้เข้าร่วมได้ในช่วงเวลา<br><strong class="text-coffee-600">${start}</strong> ถึง <strong class="text-coffee-600">${end}</strong></span>`;
+                            
+                            // Display time nicely (assuming input is meant to be Thai time)
+                            // We construct new Date strings to ensure formatting works, but formatting is local.
+                            // However, we just want to show the text provided in URL mostly.
+                            // But better to parse correctly.
+                            const startObj = parseThaiDate(urlParams.Sdate);
+                            const endObj = parseThaiDate(urlParams.Edate);
+
+                            if (startObj && endObj) {
+                                const start = startObj.toLocaleDateString('th-TH', options);
+                                const end = endObj.toLocaleDateString('th-TH', options);
+                                dateMsg = `<br><span class="text-xs font-normal mt-2 block text-gray-500">กิจกรรมนี้เปิดให้เข้าร่วมได้ในช่วงเวลา<br><strong class="text-coffee-600">${start}</strong> ถึง <strong class="text-coffee-600">${end}</strong> (เวลาไทย)</span>`;
+                            }
                         } catch(e) {
                             dateMsg = "";
                         }
@@ -240,17 +247,44 @@
             }
         }
 
+        // --- Timezone Helper ---
+
+        function parseThaiDate(dateStr) {
+            // Helper to treat input string "YYYY-MM-DD HH:mm" as Thailand Time (GMT+7)
+            if (!dateStr) return null;
+            // Ensure format "YYYY-MM-DDTHH:mm:ss+07:00"
+            // If input is "2026-01-21 09:00", replace space with T and append offset
+            let isoStr = dateStr.replace(' ', 'T');
+            if (isoStr.indexOf('+') === -1 && isoStr.indexOf('Z') === -1) {
+                isoStr += '+07:00'; // Force Thailand Timezone
+            }
+            return new Date(isoStr);
+        }
+
         function checkTime(sDateStr, eDateStr) {
             if (!sDateStr || !eDateStr) return true;
+            
+            // 1. Get Current Thailand Time
             const now = new Date();
-            const start = new Date(sDateStr);
-            const end = new Date(eDateStr);
-            if (isNaN(start.getTime()) || isNaN(end.getTime())) { return false; }
-            return now >= start && now <= end;
+            const utcNow = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const thaiNow = new Date(utcNow + (7 * 60 * 60 * 1000));
+
+            // 2. Parse Start/End as Thailand Time
+            const start = parseThaiDate(sDateStr);
+            const end = parseThaiDate(eDateStr);
+
+            if (!start || !end || isNaN(start.getTime()) || isNaN(end.getTime())) { 
+                // If invalid date format, block for safety
+                console.error("Invalid Date Format");
+                return false; 
+            }
+            
+            // Compare
+            return thaiNow >= start && thaiNow <= end;
         }
 
         async function processUserCheck() {
-            const data = await fetchBackendData();
+            let data = await fetchBackendData();
             
             if (data === null) {
                 document.getElementById('loadingText').innerText = 'การเชื่อมต่อขัดข้อง';
@@ -263,7 +297,15 @@
             if (data.isRegistered) {
                 handleSuccessAndRedirect();
             } else {
-                showRegisterForm();
+                // Double Check
+                await new Promise(r => setTimeout(r, 1000));
+                let data2 = await fetchBackendData();
+                if (data2 && data2.isRegistered) {
+                    if (data2.zoomLink) zoomLink = data2.zoomLink;
+                    handleSuccessAndRedirect();
+                } else {
+                    showRegisterForm();
+                }
             }
         }
 
@@ -401,7 +443,6 @@
             document.getElementById('registerForm').classList.add('hidden-el');
             document.getElementById('errorState').classList.remove('hidden-el');
             document.getElementById('errorTitle').innerText = title;
-            // Allow HTML in errorMessage
             document.getElementById('errorMessage').innerHTML = msg;
         }
 
