@@ -139,7 +139,7 @@
             <h3 class="text-lg font-bold text-coffee-900 mb-4">พร้อมเข้าร่วมกิจกรรมแล้ว</h3>
             
             <div class="bg-coffee-50 p-4 rounded-xl border border-coffee-200 shadow-inner">
-                <p class="text-xs text-coffee-800 mb-2 font-medium">ระบบจะเปิดห้องประชุมอัตโนมัติ... หากไม่เปิดกรุณากดข้างล่างนี้</p>
+                <p class="text-xs text-coffee-800 mb-2 font-medium">ระบบจะเปิดห้องZOOMโดยอัตโนมัติ... หากยังไม่เปิดให้กดปุ่มเข้าZOOM ข้างล่างนี้</p>
                 <button id="manualZoomBtn" class="w-full bg-coffee-600 text-white font-semibold py-3 rounded-lg shadow hover:bg-coffee-700 transition duration-300 flex items-center justify-center gap-2 text-sm animate-pulse">
                     <span>คลิกที่นี่เพื่อเข้า ZOOM</span>
                 </button>
@@ -161,7 +161,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v2.3 (Wait-Logic)
+            v2.4 (Msg-Update)
         </div>
 
     </div>
@@ -210,15 +210,28 @@
                 // --- LOGIC FLOW CHECK ---
                 // 1. Check Zopen flag
                 if (urlParams.Zopen !== '1') {
-                    // Logic: Not Zopen 1 -> Force Show Form immediately
                     showRegisterForm();
                 } else {
                     // 2. Check Time
                     if (checkTime(urlParams.Sdate, urlParams.Edate)) {
-                        // 3. Check User Status (Strict Wait)
+                        // 3. Check User Status
                         await processUserCheck();
                     } else {
-                        showError("ยังไม่ถึงเวลานัดหมาย", "กิจกรรมนี้ยังไม่เปิดให้เข้าร่วม หรือหมดเวลาแล้ว");
+                        // Error handling is done inside checkTime's else block logic (moved here for message construction)
+                        // But wait, checkTime returns boolean.
+                        // I need to format the message here.
+                        
+                        let dateMsg = "";
+                        try {
+                            const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+                            const start = new Date(urlParams.Sdate).toLocaleDateString('th-TH', options);
+                            const end = new Date(urlParams.Edate).toLocaleDateString('th-TH', options);
+                            dateMsg = `<br><span class="text-xs font-normal mt-2 block text-gray-500">กิจกรรมนี้เปิดให้เข้าร่วมได้ในช่วงเวลา<br><strong class="text-coffee-600">${start}</strong> ถึง <strong class="text-coffee-600">${end}</strong></span>`;
+                        } catch(e) {
+                            dateMsg = "";
+                        }
+                        
+                        showError("ยังไม่ถึงเวลานัดหมาย", `กิจกรรมนี้ยังไม่เปิดให้เข้าร่วม หรือหมดเวลาแล้ว${dateMsg}`);
                     }
                 }
 
@@ -237,39 +250,30 @@
         }
 
         async function processUserCheck() {
-            // Logic: Call fetchBackendData which manages the "Waiting" UI and error handling.
             const data = await fetchBackendData();
             
             if (data === null) {
-                // Network failed or timed out completely.
-                // Logic: Show Retry button. Do NOT assume unregistered.
                 document.getElementById('loadingText').innerText = 'การเชื่อมต่อขัดข้อง';
                 document.getElementById('retryBtn').classList.remove('hidden-el');
                 return;
             }
 
-            // Save Zoom Link if available
             if (data.zoomLink) { zoomLink = data.zoomLink; }
 
-            // Logic Decision based on SERVER TRUTH
             if (data.isRegistered) {
-                // Case: Registered -> Go to Zoom
                 handleSuccessAndRedirect();
             } else {
-                // Case: Not Registered -> Show Form
                 showRegisterForm();
             }
         }
 
         async function fetchBackendData() {
-            // UI: Set a timer to change text if it takes > 3 seconds
             const slowNetTimer = setTimeout(() => {
                 const loadingText = document.getElementById('loadingText');
                 if (loadingText) loadingText.innerText = 'กำลังเชื่อมต่อฐานข้อมูล อาจใช้เวลาสักครู่...';
             }, 3000);
 
             try {
-                // Timeout set to 60s (Generous wait for cold start)
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
@@ -283,7 +287,7 @@
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
-                clearTimeout(slowNetTimer); // Clear UI timer
+                clearTimeout(slowNetTimer); 
 
                 if (!response.ok) throw new Error('Network error');
                 const res = await response.json();
@@ -294,7 +298,7 @@
                     return null;
                 }
             } catch (err) {
-                clearTimeout(slowNetTimer); // Clear UI timer
+                clearTimeout(slowNetTimer);
                 console.error("Fetch Error:", err);
                 return null;
             }
@@ -320,7 +324,6 @@
             const btn = document.getElementById('submitBtn');
             const originalText = btn.innerHTML;
             
-            // 1. Disable Button & Show Spinner
             btn.disabled = true;
             btn.innerHTML = '<svg class="animate-spin h-5 w-5 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
 
@@ -346,12 +349,10 @@
                 
                 const resJson = await response.json();
                 
-                // Get Zoom Link from Response (Backend v2.0 feature)
                 if (resJson.status === 'success' && resJson.data && resJson.data.zoomLink) {
                     zoomLink = resJson.data.zoomLink;
                 }
 
-                // Proceed logic: Show Success immediately
                 if (urlParams.Zopen === '1') {
                     handleSuccessAndRedirect();
                 } else {
@@ -360,13 +361,8 @@
 
             } catch (err) {
                 console.error("Submit Error", err);
-                
-                // If error happens during submit, we should probably let them try again
-                // or if we want to be aggressive, we could assume success.
-                // But generally, safer to let them retry.
                 btn.disabled = false;
                 btn.innerHTML = originalText;
-                // No Alert shown (as requested), just reset button.
             }
         }
 
@@ -375,7 +371,6 @@
             document.getElementById('registerForm').classList.add('hidden-el');
             document.getElementById('redirectState').classList.remove('hidden-el');
 
-            // 1. Check-in (Fire & Forget)
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -386,19 +381,16 @@
                 })
             });
 
-            // 2. Open Zoom Logic
             const manualBtn = document.getElementById('manualZoomBtn');
             
             if (zoomLink) {
                 manualBtn.onclick = () => liff.openWindow({ url: zoomLink, external: true });
                 liff.openWindow({ url: zoomLink, external: true });
             } else {
-                // If Zoom Link is missing (should not happen if Backend works), try reloading
                 manualBtn.innerText = "กำลังเชื่อมต่อ... (กดเพื่อรีโหลด)";
                 manualBtn.onclick = () => location.reload();
             }
 
-            // 3. Auto Close Timer
             setTimeout(() => {
                 liff.closeWindow();
             }, 30000); 
@@ -409,7 +401,8 @@
             document.getElementById('registerForm').classList.add('hidden-el');
             document.getElementById('errorState').classList.remove('hidden-el');
             document.getElementById('errorTitle').innerText = title;
-            document.getElementById('errorMessage').innerText = msg;
+            // Allow HTML in errorMessage
+            document.getElementById('errorMessage').innerHTML = msg;
         }
 
         main();
