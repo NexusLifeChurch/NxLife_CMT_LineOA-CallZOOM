@@ -82,9 +82,9 @@
                 <div class="absolute inset-0 border-4 border-coffee-200 rounded-full animate-ping opacity-25"></div>
                 <div class="absolute inset-0 border-4 border-t-coffee-700 border-r-transparent border-b-coffee-700 border-l-transparent rounded-full animate-spin"></div>
             </div>
-            <p id="loadingText" class="text-coffee-800 text-sm font-medium tracking-wide animate-pulse">กำลังโหลด...</p>
-            <button id="retryBtn" onclick="location.reload()" class="hidden-el mt-4 px-4 py-2 bg-coffee-200 text-coffee-800 rounded-lg text-xs font-bold hover:bg-coffee-300 transition">
-                แตะเพื่อลองใหม่
+            <p id="loadingText" class="text-coffee-800 text-sm font-medium tracking-wide animate-pulse text-center px-4">กำลังโหลด...</p>
+            <button id="retryBtn" onclick="location.reload()" class="hidden-el mt-4 px-4 py-2 bg-coffee-200 text-coffee-800 rounded-lg text-xs font-bold hover:bg-coffee-300 transition shadow-sm">
+                การเชื่อมต่อขัดข้อง แตะเพื่อลองใหม่
             </button>
         </div>
 
@@ -144,7 +144,6 @@
                     <span>คลิกที่นี่เพื่อเข้า ZOOM</span>
                 </button>
             </div>
-            <!-- Added countdown text for clarity -->
             <p class="text-[10px] text-gray-400 mt-3 font-light">หน้านี้จะปิดอัตโนมัติใน 30 วินาที</p>
         </div>
 
@@ -162,7 +161,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v2.2 (AutoClose)
+            v2.3 (Wait-Logic)
         </div>
 
     </div>
@@ -192,6 +191,7 @@
                 
                 liffProfile = await liff.getProfile();
 
+                // Get Params
                 const queryString = window.location.search;
                 const params = new URLSearchParams(queryString);
                 urlParams = {
@@ -202,14 +202,20 @@
                 };
                 actId = urlParams.Act_ID;
 
+                // --- UI Update: Initial State ---
                 if (urlParams.Zopen === '1') {
                     document.getElementById('loadingText').innerText = 'กำลังเตรียมห้อง ZOOM...';
                 }
 
+                // --- LOGIC FLOW CHECK ---
+                // 1. Check Zopen flag
                 if (urlParams.Zopen !== '1') {
+                    // Logic: Not Zopen 1 -> Force Show Form immediately
                     showRegisterForm();
                 } else {
+                    // 2. Check Time
                     if (checkTime(urlParams.Sdate, urlParams.Edate)) {
+                        // 3. Check User Status (Strict Wait)
                         await processUserCheck();
                     } else {
                         showError("ยังไม่ถึงเวลานัดหมาย", "กิจกรรมนี้ยังไม่เปิดให้เข้าร่วม หรือหมดเวลาแล้ว");
@@ -231,27 +237,41 @@
         }
 
         async function processUserCheck() {
+            // Logic: Call fetchBackendData which manages the "Waiting" UI and error handling.
             const data = await fetchBackendData();
             
             if (data === null) {
-                document.getElementById('loadingText').innerText = 'การเชื่อมต่อล่าช้า';
+                // Network failed or timed out completely.
+                // Logic: Show Retry button. Do NOT assume unregistered.
+                document.getElementById('loadingText').innerText = 'การเชื่อมต่อขัดข้อง';
                 document.getElementById('retryBtn').classList.remove('hidden-el');
                 return;
             }
 
+            // Save Zoom Link if available
             if (data.zoomLink) { zoomLink = data.zoomLink; }
 
+            // Logic Decision based on SERVER TRUTH
             if (data.isRegistered) {
+                // Case: Registered -> Go to Zoom
                 handleSuccessAndRedirect();
             } else {
+                // Case: Not Registered -> Show Form
                 showRegisterForm();
             }
         }
 
         async function fetchBackendData() {
+            // UI: Set a timer to change text if it takes > 3 seconds
+            const slowNetTimer = setTimeout(() => {
+                const loadingText = document.getElementById('loadingText');
+                if (loadingText) loadingText.innerText = 'กำลังเชื่อมต่อฐานข้อมูล อาจใช้เวลาสักครู่...';
+            }, 3000);
+
             try {
+                // Timeout set to 60s (Generous wait for cold start)
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 12000); 
+                const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
@@ -263,6 +283,7 @@
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
+                clearTimeout(slowNetTimer); // Clear UI timer
 
                 if (!response.ok) throw new Error('Network error');
                 const res = await response.json();
@@ -273,6 +294,7 @@
                     return null;
                 }
             } catch (err) {
+                clearTimeout(slowNetTimer); // Clear UI timer
                 console.error("Fetch Error:", err);
                 return null;
             }
@@ -298,6 +320,7 @@
             const btn = document.getElementById('submitBtn');
             const originalText = btn.innerHTML;
             
+            // 1. Disable Button & Show Spinner
             btn.disabled = true;
             btn.innerHTML = '<svg class="animate-spin h-5 w-5 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
 
@@ -312,34 +335,23 @@
                 pictureUrl: liffProfile.pictureUrl,
                 statusMessage: liffProfile.statusMessage,
                 regName: regName,
-                actId: actId // ส่ง ActID ไปด้วย เพื่อขอ Link Zoom กลับมาเลย
+                actId: actId 
             };
 
-            const fetchPromise = fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-
-            // 5s Timeout fallback
-            const timeoutPromise = new Promise((resolve) => {
-                setTimeout(() => resolve({ timeout: true }), 5000); 
-            });
-
             try {
-                // Race between Fetch and Timeout
-                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
                 
-                if (response.timeout) {
-                    console.warn("Fetch timed out, proceeding anyway");
-                } else {
-                    const resJson = await response.json();
-                    if (resJson.status === 'success' && resJson.data.zoomLink) {
-                        // เก็บ Zoom Link ที่ Backend ส่งกลับมาให้ทันที!
-                        zoomLink = resJson.data.zoomLink;
-                    }
+                const resJson = await response.json();
+                
+                // Get Zoom Link from Response (Backend v2.0 feature)
+                if (resJson.status === 'success' && resJson.data && resJson.data.zoomLink) {
+                    zoomLink = resJson.data.zoomLink;
                 }
 
-                // Proceed logic
+                // Proceed logic: Show Success immediately
                 if (urlParams.Zopen === '1') {
                     handleSuccessAndRedirect();
                 } else {
@@ -348,12 +360,13 @@
 
             } catch (err) {
                 console.error("Submit Error", err);
-                if (urlParams.Zopen === '1') {
-                    handleSuccessAndRedirect(); 
-                } else {
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                }
+                
+                // If error happens during submit, we should probably let them try again
+                // or if we want to be aggressive, we could assume success.
+                // But generally, safer to let them retry.
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                // No Alert shown (as requested), just reset button.
             }
         }
 
@@ -380,14 +393,15 @@
                 manualBtn.onclick = () => liff.openWindow({ url: zoomLink, external: true });
                 liff.openWindow({ url: zoomLink, external: true });
             } else {
+                // If Zoom Link is missing (should not happen if Backend works), try reloading
                 manualBtn.innerText = "กำลังเชื่อมต่อ... (กดเพื่อรีโหลด)";
                 manualBtn.onclick = () => location.reload();
             }
 
-            // 3. Auto Close Timer (Added feature)
+            // 3. Auto Close Timer
             setTimeout(() => {
                 liff.closeWindow();
-            }, 30000); // 30 seconds
+            }, 30000); 
         }
 
         function showError(title, msg) {
