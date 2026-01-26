@@ -154,14 +154,15 @@
             </div>
             <h3 id="errorTitle" class="text-lg font-bold text-gray-800 mb-2">ข้อผิดพลาด</h3>
             <p id="errorMessage" class="text-gray-600 text-sm leading-relaxed bg-red-50 p-2 rounded-lg border border-red-100"></p>
-            <button onclick="location.reload()" class="mt-4 px-6 py-2 bg-gray-200 rounded-lg text-sm text-gray-700 font-semibold hover:bg-gray-300 transition">
+            <!-- Added ID="errorRetryBtn" to control visibility -->
+            <button id="errorRetryBtn" onclick="location.reload()" class="mt-4 px-6 py-2 bg-gray-200 rounded-lg text-sm text-gray-700 font-semibold hover:bg-gray-300 transition">
                 ลองใหม่
             </button>
         </div>
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v2.7 (Param-Fix)
+            v2.8 (No-Loop)
         </div>
 
     </div>
@@ -216,7 +217,8 @@
                 // 1. Critical Check: Params Missing?
                 if (!urlParams.Zopen && !urlParams.Act_ID) {
                     // กรณี Parameter หายหมด (อาจเกิดจาก Redirect Error บน PC)
-                    showError("ลิงก์ไม่สมบูรณ์", "ไม่พบข้อมูลกิจกรรม กรุณากดลิงก์ใหม่อีกครั้ง หรือกดปุ่มลองใหม่");
+                    // ACTION: Hide Retry Button (showRetry = false)
+                    showError("ลิงก์ไม่สมบูรณ์", "ไม่พบข้อมูลกิจกรรม<br>กรุณาปิดหน้าต่างนี้ แล้วกดลิงก์จาก LINE ใหม่อีกครั้ง", false);
                     return;
                 }
 
@@ -436,12 +438,20 @@
             }, 30000); 
         }
 
-        function showError(title, msg) {
+        function showError(title, msg, showRetry = true) {
             document.getElementById('loadingState').classList.add('hidden-el');
             document.getElementById('registerForm').classList.add('hidden-el');
             document.getElementById('errorState').classList.remove('hidden-el');
             document.getElementById('errorTitle').innerText = title;
             document.getElementById('errorMessage').innerHTML = msg;
+            
+            // Toggle Retry Button
+            const retryBtn = document.getElementById('errorRetryBtn');
+            if (showRetry) {
+                retryBtn.classList.remove('hidden-el');
+            } else {
+                retryBtn.classList.add('hidden-el');
+            }
         }
 
         main();
