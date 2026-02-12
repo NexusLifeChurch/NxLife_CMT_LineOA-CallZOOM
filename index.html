@@ -162,7 +162,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v2.8 (No-Loop)
+            v2.9 (Msg-Redirect)
         </div>
 
     </div>
@@ -218,7 +218,7 @@
                 if (!urlParams.Zopen && !urlParams.Act_ID) {
                     // กรณี Parameter หายหมด (อาจเกิดจาก Redirect Error บน PC)
                     // ACTION: Hide Retry Button (showRetry = false)
-                    showError("ลิงก์ไม่สมบูรณ์", "ไม่พบข้อมูลกิจกรรม<br>กรุณาปิดหน้าต่างนี้ แล้วกดลิงก์จาก LINE ใหม่อีกครั้ง", false);
+                    showError("Login LINE สำเร็จแล้ว", "กรุณากดลิงก์เข้า ZOOM อีกครั้งเพื่อเข้าสู่ห้องประชุม", false);
                     return;
                 }
 
