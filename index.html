@@ -162,7 +162,7 @@
 
         <!-- Version Info -->
         <div class="absolute bottom-1 right-2 text-[10px] text-gray-400 font-light">
-            v2.9 (Msg-Redirect)
+            v2.12 (VIP-Link)
         </div>
 
     </div>
@@ -185,20 +185,42 @@
                 // Initialize LIFF
                 await liff.init({ liffId: LIFF_ID });
                 
+                // --- STEP 1: PRE-LOGIN SAVE PARAMS ---
+                // ถ้ายังไม่ได้ Login (เช่น เข้าผ่าน PC ครั้งแรก) จะเก็บ Parameter ก่อนโดนเตะไปหน้า Login
                 if (!liff.isLoggedIn()) {
+                    let currentQuery = window.location.search;
+                    if (currentQuery && currentQuery.includes('Act_ID')) {
+                        sessionStorage.setItem('nxlife_params', currentQuery);
+                    }
                     liff.login();
-                    return;
+                    return; // หยุดการทำงานรอระบบเตะไป Login
                 }
                 
                 liffProfile = await liff.getProfile();
 
-                // Validation
+                // Validation User
                 if (!liffProfile || !liffProfile.userId) {
                     throw new Error("ไม่สามารถดึงข้อมูล UserID ได้ กรุณาลองใหม่");
                 }
 
-                const queryString = window.location.search;
-                const params = new URLSearchParams(queryString);
+                // --- STEP 2: RESTORE PARAMS (If needed) ---
+                let queryString = window.location.search;
+                let params = new URLSearchParams(queryString);
+
+                // ตรวจสอบว่า Parameter หายไปหลังจาก Login กลับมาหรือไม่
+                if (!params.get('Zopen') && !params.get('Act_ID')) {
+                    // ถ้าหาย ให้ลองไปค้นในกล่อง sessionStorage ที่ฝากไว้
+                    const savedQueryString = sessionStorage.getItem('nxlife_params');
+                    if (savedQueryString) {
+                        params = new URLSearchParams(savedQueryString);
+                        // เคลียร์ทิ้งหลังจากนำมาใช้แล้วเพื่อความสะอาด
+                        sessionStorage.removeItem('nxlife_params');
+                    }
+                } else {
+                    // ถ้ามี Parameter มาครบตั้งแต่แรก (เช่น บนมือถือ) ก็เคลียร์ของเก่าทิ้งเผื่อตกค้าง
+                    sessionStorage.removeItem('nxlife_params');
+                }
+
                 urlParams = {
                     Zopen: params.get('Zopen'),
                     Act_ID: params.get('Act_ID'),
@@ -208,27 +230,31 @@
                 actId = urlParams.Act_ID;
 
                 // --- UI Update: Initial State ---
-                if (urlParams.Zopen === '1') {
+                if (urlParams.Zopen === '1' || urlParams.Zopen === '*') {
                     document.getElementById('loadingText').innerText = 'กำลังเตรียมห้อง ZOOM...';
                 }
 
-                // --- LOGIC FLOW CHECK (FIXED) ---
+                // --- LOGIC FLOW CHECK ---
                 
-                // 1. Critical Check: Params Missing?
+                // Critical Check: Params Missing? (แม้ว่าจะพยายามกู้คืนแล้วก็ตาม)
                 if (!urlParams.Zopen && !urlParams.Act_ID) {
-                    // กรณี Parameter หายหมด (อาจเกิดจาก Redirect Error บน PC)
-                    // ACTION: Hide Retry Button (showRetry = false)
-                    showError("Login LINE สำเร็จแล้ว", "กรุณากดลิงก์เข้า ZOOM อีกครั้งเพื่อเข้าสู่ห้องประชุม", false);
+                    showError("ข้อมูลลิงก์ไม่สมบูรณ์", "ไม่พบข้อมูลกิจกรรม<br>กรุณากลับไปกดลิงก์เข้า ZOOM จากในแชท LINE ใหม่อีกครั้ง", false);
                     return;
                 }
 
                 // 2. Main Logic
-                if (urlParams.Zopen === '1') {
+                if (urlParams.Zopen === '1' || urlParams.Zopen === '*') {
                     // Case Zopen = 1 -> Check Time
-                    if (checkTime(urlParams.Sdate, urlParams.Edate)) {
+                    // Case Zopen = * -> Skip Time Check (Always true)
+                    let isTimeValid = true;
+                    if (urlParams.Zopen === '1') {
+                        isTimeValid = checkTime(urlParams.Sdate, urlParams.Edate);
+                    }
+
+                    if (isTimeValid) {
                          await processUserCheck();
                     } else {
-                        // ... (Time Error handling) ...
+                        // Time Error handling
                         let dateMsg = "";
                         try {
                             const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
@@ -245,7 +271,7 @@
                     }
 
                 } else {
-                     // Case Zopen exists BUT is NOT '1' (e.g. '0' or custom) -> Show Form
+                     // Case Zopen exists BUT is NOT '1' or '*' (e.g. '0' or custom) -> Show Form
                      showRegisterForm();
                 }
 
@@ -395,7 +421,7 @@
                     zoomLink = resJson.data.zoomLink;
                 }
 
-                if (urlParams.Zopen === '1') {
+                if (urlParams.Zopen === '1' || urlParams.Zopen === '*') {
                     handleSuccessAndRedirect();
                 } else {
                     liff.closeWindow();
